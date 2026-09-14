@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🤘Party's😎BS🤪👀rideouts🍻🏍</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      margin: 0;
+      padding: 10px;
+      background: #1e1e24;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: clamp(16px, 4.5vw, 22px);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #fca311;
+      text-align: center;
+      word-break: break-word;
+    }
+    #game-container {
+      position: relative;
+      border: 3px solid #fca311;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      background: #fdf0d5;
+      width: 100%;
+      max-width: 800px;
+      touch-action: manipulation;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 800 / 300;
+    }
+    .instructions {
+      margin-top: 15px;
+      color: #aaa;
+      font-size: 14px;
+      text-align: center;
+    }
+    .instructions kbd {
+      background: #333;
+      padding: 3px 7px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🤘Party's😎BS🤪👀rideouts🍻🏍</h1>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="800" height="300"></canvas>
+  </div>
+  <p class="instructions">Press <kbd>Space</kbd>, <kbd>↑</kbd>, or <b>Tap</b> to Jump / Restart</p>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const GROUND_Y = 250;
+    const GRAVITY = 0.65;
+    const JUMP_FORCE = -13;
+
+    let gameSpeed = 5;
+    let score = 0;
+    let highScore = 0;
+    let gameOver = false;
+    let obstacles = [];
+    let clouds = [];
+    let nextObstacleTimer = 0;
+
+    // --- Chopper Rider Object ---
+    const rider = {
+      x: 70,
+      y: GROUND_Y,
+      width: 70,
+      height: 45,
+      vy: 0,
+      isGrounded: true,
+      wheelRotation: 0,
+
+      jump() {
+        if (this.isGrounded) {
+          this.vy = JUMP_FORCE;
+          this.isGrounded = false;
+        }
+      },
+
+      update() {
+        this.vy += GRAVITY;
+        this.y += this.vy;
+
+        if (this.y >= GROUND_Y) {
+          this.y = GROUND_Y;
+          this.vy = 0;
+          this.isGrounded = true;
+        }
+
+        if (this.isGrounded) {
+          this.wheelRotation += 0.25;
+        }
+      },
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Slight tilt when jumping
+        if (!this.isGrounded) {
+          ctx.rotate(-0.08);
+        }
+
+        // --- Back Wheel ---
+        this.drawWheel(0, 0, 10);
+
+        // --- Front Wheel (Extended chopper style) ---
+        this.drawWheel(55, 0, 10);
+
+        // --- Frame & Engine ---
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);       // Back axle
+        ctx.lineTo(20, -5);     // Engine block base
+        ctx.lineTo(25, -20);    // Fuel tank area
+        ctx.lineTo(10, -15);    // Seat area
+        ctx.lineTo(0, 0);       // Return to axle
+        ctx.stroke();
+
+        // Engine detail
+        ctx.fillStyle = '#777';
+        ctx.fillRect(16, -14, 10, 10);
+
+        // Gas Tank (Orange custom paint)
+        ctx.fillStyle = '#e63946';
+        ctx.beginPath();
+        ctx.ellipse(28, -20, 10, 5, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High "Ape Hanger" Handlebars & Long Fork
+        ctx.strokeStyle = '#bbb'; // Chrome fork
+        ctx.beginPath();
+        ctx.moveTo(55, 0);       // Front axle
+        ctx.lineTo(34, -22);     // Triple clamp
+        ctx.lineTo(31, -38);     // High handlebars
+        ctx.stroke();
+
+        // Exhaust pipe
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(22, -6);
+        ctx.lineTo(2, -4);
+        ctx.lineTo(-6, -8);
+        ctx.stroke();
+
+        // --- Rider ---
+        // Torso / Leather Jacket
+        ctx.strokeStyle = '#1d3557';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(14, -16);
+        ctx.lineTo(20, -32);
+        ctx.stroke();
+
+        // Arms reaching to high bars
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(20, -30);
+        ctx.lineTo(31, -36);
+        ctx.stroke();
+
+        // Helmet / Head
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.arc(22, -38, 7, 0, Math.PI * 2);
+        ctx.fill();
+        // Goggles
+        ctx.fillStyle = '#ffb703';
+        ctx.fillRect(25, -40, 4, 3);
+
+        ctx.restore();
+      },
+
+      drawWheel(wx, wy, radius) {
+        ctx.save();
+        ctx.translate(wx, wy);
+        ctx.rotate(this.wheelRotation);
+
+        // Tire
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hub cap
+        ctx.fillStyle = '#ddd';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spokes
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.moveTo(-radius, 0);
+          ctx.lineTo(radius, 0);
+          ctx.rotate(Math.PI / 4);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    };
+
+    // --- Tent Obstacle Class ---
+    class Tent {
+      constructor() {
+        this.width = 45 + Math.floor(Math.random() * 20); // Variety of tent sizes
+        this.height = 35 + Math.floor(Math.random() * 10);
+        this.x = canvas.width + 50;
+        this.y = GROUND_Y;
+        this.color = Math.random() > 0.5 ? '#2a9d8f' : '#e76f51'; // Teal or Burnt Orange
+      }
+
+      update() {
+        this.x -= gameSpeed;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Tent Canvas (Triangle)
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(this.width / 2, -this.height);
+        ctx.lineTo(this.width, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Tent Opening flap shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(this.width / 2, -this.height);
+        ctx.lineTo(this.width / 2, 0);
+        ctx.lineTo(this.width * 0.75, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Entrance flap highlight
+        ctx.strokeStyle = '#f4a261';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(this.width / 2, -this.height);
+        ctx.lineTo(this.width * 0.25, 0);
+        ctx.stroke();
+
+        // Support ropes / pegs
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.width / 2, -this.height);
+        ctx.lineTo(-6, 0);
+        ctx.moveTo(this.width / 2, -this.height);
+        ctx.lineTo(this.width + 6, 0);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // --- Background Clouds ---
+    class Cloud {
+      constructor() {
+        this.x = canvas.width + Math.random() * 200;
+        this.y = 30 + Math.random() * 80;
+        this.speed = 0.5 + Math.random() * 0.7;
+        this.scale = 0.6 + Math.random() * 0.5;
+      }
+      update() {
+        this.x -= this.speed;
+      }
+      draw() {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 16 * this.scale, 0, Math.PI * 2);
+        ctx.arc(this.x + 12 * this.scale, this.y - 8 * this.scale, 20 * this.scale, 0, Math.PI * 2);
+        ctx.arc(this.x + 28 * this.scale, this.y, 14 * this.scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- Reset Game ---
+    function resetGame() {
+      obstacles = [];
+      clouds = [];
+      rider.y = GROUND_Y;
+      rider.vy = 0;
+      rider.isGrounded = true;
+      score = 0;
+      gameSpeed = 5;
+      nextObstacleTimer = 0;
+      gameOver = false;
+    }
+
+    // --- Collision Detection ---
+    function checkCollision(r, t) {
+      const rBox = {
+        left: r.x - 10,
+        right: r.x + 60,
+        top: r.y - 40,
+        bottom: r.y
+      };
+
+      const tBox = {
+        left: t.x + 8,
+        right: t.x + t.width - 8,
+        top: t.y - t.height + 6,
+        bottom: t.y
+      };
+
+      return (
+        rBox.right > tBox.left &&
+        rBox.left < tBox.right &&
+        rBox.bottom > tBox.top &&
+        rBox.top < tBox.bottom
+      );
+    }
+
+    // --- Main Game Loop ---
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Distant Mountains
+      ctx.fillStyle = '#e9c46a';
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_Y);
+      ctx.lineTo(150, 180);
+      ctx.lineTo(300, GROUND_Y);
+      ctx.lineTo(450, 160);
+      ctx.lineTo(600, GROUND_Y);
+      ctx.lineTo(750, 190);
+      ctx.lineTo(800, GROUND_Y);
+      ctx.fill();
+
+      // 2. Clouds
+      if (Math.random() < 0.015) clouds.push(new Cloud());
+      clouds.forEach((cloud, index) => {
+        cloud.update();
+        cloud.draw();
+        if (cloud.x < -100) clouds.splice(index, 1);
+      });
+
+      // 3. Ground Line
+      ctx.strokeStyle = '#d4a373';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_Y + 1);
+      ctx.lineTo(canvas.width, GROUND_Y + 1);
+      ctx.stroke();
+
+      // Road gravel texture
+      ctx.fillStyle = '#ccd5ae';
+      ctx.fillRect(0, GROUND_Y + 4, canvas.width, canvas.height - GROUND_Y);
+
+      if (!gameOver) {
+        score++;
+        if (score % 250 === 0) gameSpeed += 0.4;
+
+        rider.update();
+
+        // Spawn Tents
+        nextObstacleTimer--;
+        if (nextObstacleTimer <= 0) {
+          obstacles.push(new Tent());
+          nextObstacleTimer = Math.floor(70 + Math.random() * 60 - (gameSpeed * 2));
+          if (nextObstacleTimer < 45) nextObstacleTimer = 45;
+        }
+
+        // Update Obstacles & Collision Check
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          const tent = obstacles[i];
+          tent.update();
+
+          if (checkCollision(rider, tent)) {
+            gameOver = true;
+            if (score > highScore) highScore = score;
+          }
+
+          if (tent.x + tent.width < -20) {
+            obstacles.splice(i, 1);
+          }
+        }
+      }
+
+      // Draw Entities
+      obstacles.forEach(tent => tent.draw());
+      rider.draw();
+
+      // 4. UI / HUD
+      ctx.fillStyle = '#333';
+      ctx.font = '16px monospace';
+      ctx.fillText(`SCORE: ${Math.floor(score)}`, canvas.width - 150, 30);
+      ctx.fillText(`HI: ${Math.floor(highScore)}`, canvas.width - 240, 30);
+
+      // Game Over Screen
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('CRASHED!', canvas.width / 2, canvas.height / 2 - 10);
+
+        ctx.font = '16px monospace';
+        ctx.fillText('Press SPACE or TAP to Ride Again', canvas.width / 2, canvas.height / 2 + 30);
+        ctx.textAlign = 'left';
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    // --- Inputs ---
+    function triggerAction() {
+      if (gameOver) {
+        resetGame();
+      } else {
+        rider.jump();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        triggerAction();
+      }
+    });
+
+    window.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      triggerAction();
+    });
+
+    // Start loop
+    loop();
+  </script>
+</body>
+</html>
